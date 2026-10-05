@@ -1,0 +1,89 @@
+name: DODI Native Windows Build
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/dodi-windows-native.yml"
+      - "DODI-CAM-FINAL-NATIVE-OPERATOR-SIMPLE-PLASMA-READY-SOURCE.zip"
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify native DODI source
+        shell: powershell
+        run: |
+          $src = "DODI-CAM-FINAL-NATIVE-OPERATOR-SIMPLE-PLASMA-READY-SOURCE.zip"
+          if (!(Test-Path $src)) { throw "Native DODI source ZIP is missing: $src" }
+          Write-Host "Native source found: $src"
+      - name: Install build tools
+        shell: powershell
+        run: |
+          choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y --no-progress
+          choco install innosetup -y --no-progress
+      - name: Extract native source
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path source | Out-Null
+          Expand-Archive -Path "DODI-CAM-FINAL-NATIVE-OPERATOR-SIMPLE-PLASMA-READY-SOURCE.zip" -DestinationPath source -Force
+          $dirs = Get-ChildItem source -Directory
+          if ($dirs.Count -eq 1) { $root = $dirs[0].FullName } else { $root = (Resolve-Path source).Path }
+          "DODI_SOURCE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Configure native Windows build
+        shell: powershell
+        run: cmake -S "$env:DODI_SOURCE_ROOT" -B build -G "Visual Studio 17 2022" -A x64 -DFREECAD_USE_PCH=OFF
+      - name: Build Release
+        shell: powershell
+        run: cmake --build build --config Release --parallel 2
+      - name: Verify native executable
+        shell: powershell
+        run: |
+          $exe = Get-ChildItem -Path build -Recurse -Filter "FreeCAD.exe" | Select-Object -First 1
+          if (!$exe) { throw "Native executable was not produced." }
+          Write-Host "Native executable: $($exe.FullName)"
+      - name: Verify no browser wrapper
+        shell: powershell
+        run: |
+          $files = Get-ChildItem -Path build -Recurse -File -ErrorAction SilentlyContinue
+          $bad = $files | Where-Object { $_.Name -match "chrome\.exe|msedge\.exe|electron\.exe" }
+          if ($bad) { throw "Browser wrapper executable detected." }
+      - name: Package native build
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          Copy-Item -Path build -Destination package\build -Recurse -Force
+          Compress-Archive -Path package\* -DestinationPath DODI-CAM-Native-Windows-Build.zip -Force
+      - name: Build installer
+        shell: powershell
+        run: |
+          $iss = @'
+          [Setup]
+          AppName=DODI CAM
+          AppVersion=1.0.0
+          DefaultDirName={autopf}\DODI CAM
+          OutputBaseFilename=DODI-CAM-Setup
+          ArchitecturesInstallIn64BitMode=x64
+          Compression=lzma
+          SolidCompression=yes
+          [Files]
+          Source: "package\build\**\*"; DestDir: "{app}\build"; Flags: recursesubdirs ignoreversion
+          [Icons]
+          Name: "{autodesktop}\DODI CAM"; Filename: "{app}\build\bin\FreeCAD.exe"
+          Name: "{group}\DODI CAM"; Filename: "{app}\build\bin\FreeCAD.exe"
+          [UninstallDelete]
+          Type: filesandordirs; Name: "{app}"
+          '@
+          $iss | Set-Content -Encoding UTF8 DODI-CAM.iss
+          & "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe" DODI-CAM.iss
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DODI-CAM-Windows-Installer
+          path: |
+            DODI-CAM-Setup.exe
+            DODI-CAM-Native-Windows-Build.zip
+          if-no-files-found: error
