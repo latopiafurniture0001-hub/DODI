@@ -134,6 +134,26 @@ jobs:
           Write-Host "Bundled Coin restored: $coin"
           Write-Host "Bundled Pivy restored: $pivy"
           Write-Host "Bundled OndselSolver restored: $ondsel"
+          $gsl = Join-Path "$env:DODI_SOURCE_ROOT" "src\\3rdParty\\GSL"
+          if (!(Test-Path (Join-Path $gsl "CMakeLists.txt"))) {
+            if (Test-Path $gsl) { Remove-Item $gsl -Recurse -Force }
+            New-Item -ItemType Directory -Force -Path (Split-Path $gsl) | Out-Null
+            git clone --depth 1 --recurse-submodules https://github.com/microsoft/GSL.git $gsl
+            if ($LASTEXITCODE -ne 0) { throw "Failed to restore GSL submodule." }
+          }
+
+          $addon = Join-Path "$env:DODI_SOURCE_ROOT" "src\\Mod\\AddonManager"
+          if (!(Test-Path (Join-Path $addon "CMakeLists.txt"))) {
+            if (Test-Path $addon) { Remove-Item $addon -Recurse -Force }
+            New-Item -ItemType Directory -Force -Path (Split-Path $addon) | Out-Null
+            git clone --depth 1 --recurse-submodules https://github.com/FreeCAD/AddonManager.git $addon
+            if ($LASTEXITCODE -ne 0) { throw "Failed to restore AddonManager submodule." }
+          }
+
+          if (!(Test-Path (Join-Path $gsl "CMakeLists.txt"))) { throw "GSL CMakeLists.txt is still missing." }
+          if (!(Test-Path (Join-Path $addon "CMakeLists.txt"))) { throw "AddonManager CMakeLists.txt is still missing." }
+          Write-Host "GSL restored: $gsl"
+          Write-Host "AddonManager restored: $addon"
       - name: Configure native Windows build
         shell: powershell
         run: |
