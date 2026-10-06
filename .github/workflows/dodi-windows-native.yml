@@ -46,18 +46,38 @@ jobs:
           $libPackRoot = $qsvg.Directory.Parent.Parent.FullName
           Write-Host "LibPack root: $libPackRoot"
 
-          $yamlCfg = Get-ChildItem -Path $libPackRoot -Recurse -Filter "yaml-cpp-config.cmake" -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (!$yamlCfg) {
-            Write-Host "yaml-cpp CMake config files found:"
-            Get-ChildItem -Path $libPackRoot -Recurse -Include "*yaml*cpp*.cmake" -File -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
-            throw "yaml-cpp CMake package config was not found inside LibPack."
-          }
-          $yamlCppDir = $yamlCfg.Directory.FullName
-          Write-Host "yaml-cpp package dir: $yamlCppDir"
-
           "FREECAD_LIBPACK_DIR=$libPackRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Install yaml-cpp for Windows
+        shell: powershell
+        run: |
+          if (Test-Path "$env:VCPKG_INSTALLATION_ROOT") {
+            $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT "vcpkg.exe"
+          } else {
+            $vcpkg = Join-Path $env:RUNNER_TEMP "vcpkg\vcpkg.exe"
+            if (!(Test-Path $vcpkg)) {
+              git clone --depth 1 https://github.com/microsoft/vcpkg.git (Split-Path $vcpkg)
+              & (Join-Path (Split-Path $vcpkg) "bootstrap-vcpkg.bat") -disableMetrics
+            }
+          }
+
+          & $vcpkg install yaml-cpp:x64-windows --disable-metrics
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg yaml-cpp installation failed." }
+
+          $vcpkgRoot = Split-Path $vcpkg -Parent
+          $yamlCppDir = Join-Path $vcpkgRoot "installed\x64-windows\share\yaml-cpp"
+          $yamlConfig = Join-Path $yamlCppDir "yaml-cpp-config.cmake"
+
+          if (!(Test-Path $yamlConfig)) {
+            Write-Host "yaml-cpp install tree:"
+            Get-ChildItem (Join-Path $vcpkgRoot "installed\x64-windows\share") -Directory -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+            throw "vcpkg installed yaml-cpp but yaml-cpp-config.cmake was not found."
+          }
+
+          Write-Host "yaml-cpp CMake package: $yamlCppDir"
+          "VCPKG_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
           "YAML_CPP_DIR=$yamlCppDir" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "CMAKE_PREFIX_PATH=$libPackRoot;$yamlCppDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "CMAKE_PREFIX_PATH=$vcpkgRoot\installed\x64-windows;$yamlCppDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Extract native source
         shell: powershell
         run: |
@@ -72,8 +92,12 @@ jobs:
           Write-Host "Using LibPack: $env:FREECAD_LIBPACK_DIR"
           cmake -S "$env:DODI_SOURCE_ROOT" -B build -G "Visual Studio 17 2022" -A x64 `
             -DFREECAD_LIBPACK_DIR="$env:FREECAD_LIBPACK_DIR" `
-            -DYAML_CPP_DIR="$env:YAML_CPP_DIR" `
+            -Dyaml-cpp_DIR="$env:YAML_CPP_DIR" `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
             -DCMAKE_PREFIX_PATH="$env:CMAKE_PREFIX_PATH" `
+            -DFREECAD_COPY_LIBPACK_BIN_TO_BUILD=ON `
+            -DFREECAD_COPY_DEPEND_DIRS_TO_BUILD=ON `
+            -DFREECAD_COPY_PLUGINS_BIN_TO_BUILD=ON `
             -DFREECAD_USE_PCH=OFF
       - name: Build Release
         shell: powershell
