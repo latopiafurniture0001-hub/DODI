@@ -27,6 +27,24 @@ jobs:
         run: |
           choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y --no-progress
           choco install innosetup -y --no-progress
+      - name: Download FreeCAD Windows LibPack
+        shell: powershell
+        run: |
+          $url = "https://github.com/FreeCAD/FreeCAD-LibPack/releases/download/3.5.5/LibPack-26.3.0-v3.5.5-x64-Release.7z"
+          $archive = Join-Path $PWD "LibPack-x64-Release.7z"
+          Invoke-WebRequest -Uri $url -OutFile $archive -Headers @{ "User-Agent" = "DODI-CAM-Windows-Build" }
+          if (!(Test-Path $archive)) { throw "LibPack download failed." }
+          New-Item -ItemType Directory -Force -Path libpack | Out-Null
+          $sevenZip = (Get-Command 7z.exe -ErrorAction SilentlyContinue).Source
+          if (!$sevenZip) { $sevenZip = "$env:ProgramFiles\7-Zip\7z.exe" }
+          if (!(Test-Path $sevenZip)) { throw "7-Zip executable not found." }
+          & $sevenZip x $archive "-olibpack" -y
+          if ($LASTEXITCODE -ne 0) { throw "7-Zip failed to extract LibPack." }
+          $qsvg = Get-ChildItem -Path libpack -Recurse -Filter "qsvg.dll" -File | Select-Object -First 1
+          if (!$qsvg) { throw "qsvg.dll was not found in extracted LibPack." }
+          $libPackRoot = $qsvg.Directory.Parent.Parent.FullName
+          Write-Host "LibPack root: $libPackRoot"
+          "FREECAD_LIBPACK_DIR=$libPackRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Extract native source
         shell: powershell
         run: |
