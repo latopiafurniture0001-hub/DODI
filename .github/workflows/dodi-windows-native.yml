@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/dodi-windows-native.yml"
       - "DODI-CAM-FINAL-NATIVE-OPERATOR-SIMPLE-PLASMA-READY-SOURCE.zip"
+      - "build-patches/**"
 
 jobs:
   build-windows:
@@ -111,6 +112,15 @@ jobs:
           $py = Get-Content (Join-Path $env:DODI_SOURCE_ROOT "src\\Mod\\CAM\\PathScripts\\DodiNativeCam.py") -Raw
           if ($py -notmatch "DODI operator bridge to the native FreeCAD CAM engine") { throw "Unexpected DodiNativeCam.py content." }
           Write-Host "DODI native CAM modules verified."
+
+
+      - name: Apply DODI V2.3 source patch
+        shell: powershell
+        run: |
+          $patch = Join-Path $PWD "build-patches\v2.3\Apply-DodiV23Patch.ps1"
+          if (!(Test-Path $patch)) { throw "DODI V2.3 patch script missing: $patch" }
+          & $patch -SourceRoot "$env:DODI_SOURCE_ROOT"
+          if ($LASTEXITCODE -ne 0) { throw "DODI V2.3 source patch failed." }
 
       - name: Restore FreeCAD Coin/Pivy submodules
         shell: powershell
