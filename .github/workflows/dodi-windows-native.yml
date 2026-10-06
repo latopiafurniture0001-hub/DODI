@@ -10,7 +10,7 @@ on:
 jobs:
   build-windows:
     runs-on: windows-2022
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -94,6 +94,24 @@ jobs:
           $dirs = Get-ChildItem source -Directory
           if ($dirs.Count -eq 1) { $root = $dirs[0].FullName } else { $root = (Resolve-Path source).Path }
           "DODI_SOURCE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Verify DODI native CAM modules
+        shell: powershell
+        run: |
+          $required = @(
+            (Join-Path $env:DODI_SOURCE_ROOT "src\\Gui\\DodiSimpleCam.cpp"),
+            (Join-Path $env:DODI_SOURCE_ROOT "src\\Gui\\DodiSimpleCam.h"),
+            (Join-Path $env:DODI_SOURCE_ROOT "src\\Mod\\CAM\\PathScripts\\DodiNativeCam.py"),
+            (Join-Path $env:DODI_SOURCE_ROOT "src\\Gui\\DodiAccessControl.cpp"),
+            (Join-Path $env:DODI_SOURCE_ROOT "src\\Gui\\Icons\\dodi.qss")
+          )
+          foreach ($p in $required) {
+            if (!(Test-Path $p)) { throw "Required DODI module missing: $p" }
+          }
+          $py = Get-Content (Join-Path $env:DODI_SOURCE_ROOT "src\\Mod\\CAM\\PathScripts\\DodiNativeCam.py") -Raw
+          if ($py -notmatch "DODI operator bridge to the native FreeCAD CAM engine") { throw "Unexpected DodiNativeCam.py content." }
+          Write-Host "DODI native CAM modules verified."
+
       - name: Restore FreeCAD Coin/Pivy submodules
         shell: powershell
         run: |
