@@ -166,10 +166,13 @@ jobs:
             -DFREECAD_COPY_LIBPACK_BIN_TO_BUILD=ON `
             -DFREECAD_COPY_DEPEND_DIRS_TO_BUILD=ON `
             -DFREECAD_COPY_PLUGINS_BIN_TO_BUILD=ON `
-            -DFREECAD_USE_PCH=OFF
+            -DFREECAD_USE_PCH=OFF `
+            -DENABLE_DEVELOPER_TESTS=OFF `
+            -DBUILD_TEST=OFF `
+            -DBUILD_ASSEMBLY=OFF
       - name: Build Release
         shell: powershell
-        run: cmake --build build --config Release --parallel 2
+        run: cmake --build build --config Release --target FreeCADMain --parallel 4
       - name: Verify native executable
         shell: powershell
         run: |
