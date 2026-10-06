@@ -98,6 +98,7 @@ jobs:
         shell: powershell
         run: |
           $coin = Join-Path "$env:DODI_SOURCE_ROOT" "src\\3rdParty\\coin"
+          $ondsel = Join-Path "$env:DODI_SOURCE_ROOT" "src\\3rdParty\\OndselSolver"
           $pivy = Join-Path "$env:DODI_SOURCE_ROOT" "src\\3rdParty\\pivy"
 
           Write-Host "FreeCAD LibPack 3.5.5 does not bundle Coin/Pivy; restoring the FreeCAD-vendored submodules required by SetupBundledCoinPivy."
@@ -119,8 +120,20 @@ jobs:
           if (!(Test-Path (Join-Path $coin "CMakeLists.txt"))) { throw "Bundled Coin CMakeLists.txt is still missing." }
           if (!(Test-Path (Join-Path $pivy "CMakeLists.txt"))) { throw "Bundled Pivy CMakeLists.txt is still missing." }
 
+          if (!(Test-Path (Join-Path $ondsel "CMakeLists.txt"))) {
+            if (Test-Path $ondsel) { Remove-Item $ondsel -Recurse -Force }
+            New-Item -ItemType Directory -Force -Path (Split-Path $ondsel) | Out-Null
+            git clone --depth 1 --recurse-submodules https://github.com/FreeCAD/OndselSolver.git $ondsel
+            if ($LASTEXITCODE -ne 0) { throw "Failed to restore bundled OndselSolver submodule." }
+          }
+
+          if (!(Test-Path (Join-Path $coin "CMakeLists.txt"))) { throw "Bundled Coin CMakeLists.txt is still missing." }
+          if (!(Test-Path (Join-Path $pivy "CMakeLists.txt"))) { throw "Bundled Pivy CMakeLists.txt is still missing." }
+          if (!(Test-Path (Join-Path $ondsel "CMakeLists.txt"))) { throw "Bundled OndselSolver CMakeLists.txt is still missing." }
+
           Write-Host "Bundled Coin restored: $coin"
           Write-Host "Bundled Pivy restored: $pivy"
+          Write-Host "Bundled OndselSolver restored: $ondsel"
       - name: Configure native Windows build
         shell: powershell
         run: |
