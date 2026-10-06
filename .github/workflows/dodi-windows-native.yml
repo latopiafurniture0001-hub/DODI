@@ -122,6 +122,20 @@ jobs:
           & $patch -SourceRoot "$env:DODI_SOURCE_ROOT"
           if ($LASTEXITCODE -ne 0) { throw "DODI V2.3 source patch failed." }
 
+
+      - name: Verify V2.3 patch result
+        shell: powershell
+        run: |
+          $cpp = Join-Path "$env:DODI_SOURCE_ROOT" "src\Gui\DodiSimpleCam.cpp"
+          $py = Join-Path "$env:DODI_SOURCE_ROOT" "src\Mod\CAM\PathScripts\DodiNativeCam.py"
+          $c = Get-Content $cpp -Raw
+          $p = Get-Content $py -Raw
+          if ($c -notmatch "sizePreset") { throw "V2.3 size preset patch was not applied." }
+          if ($c -notmatch "throughCut") { throw "V2.3 through-cut patch was not applied." }
+          if ($c -notmatch "Base::Interpreter\(\)\.runString") { throw "V2.3 Python error gate patch was not applied." }
+          if ($p -notmatch "_validate_geometry") { throw "V2.3 geometry validation patch was not applied." }
+          Write-Host "DODI V2.3 patch verified in extracted native source."
+
       - name: Restore FreeCAD Coin/Pivy submodules
         shell: powershell
         run: |
