@@ -94,6 +94,33 @@ jobs:
           $dirs = Get-ChildItem source -Directory
           if ($dirs.Count -eq 1) { $root = $dirs[0].FullName } else { $root = (Resolve-Path source).Path }
           "DODI_SOURCE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Restore FreeCAD Coin/Pivy submodules
+        shell: powershell
+        run: |
+          $coin = Join-Path "$env:DODI_SOURCE_ROOT" "src\\3rdParty\\coin"
+          $pivy = Join-Path "$env:DODI_SOURCE_ROOT" "src\\3rdParty\\pivy"
+
+          Write-Host "FreeCAD LibPack 3.5.5 does not bundle Coin/Pivy; restoring the FreeCAD-vendored submodules required by SetupBundledCoinPivy."
+
+          if (!(Test-Path (Join-Path $coin "CMakeLists.txt"))) {
+            if (Test-Path $coin) { Remove-Item $coin -Recurse -Force }
+            New-Item -ItemType Directory -Force -Path (Split-Path $coin) | Out-Null
+            git clone --depth 1 --branch freecad-master --recurse-submodules https://github.com/FreeCAD/coin.git $coin
+            if ($LASTEXITCODE -ne 0) { throw "Failed to restore bundled Coin submodule." }
+          }
+
+          if (!(Test-Path (Join-Path $pivy "CMakeLists.txt"))) {
+            if (Test-Path $pivy) { Remove-Item $pivy -Recurse -Force }
+            New-Item -ItemType Directory -Force -Path (Split-Path $pivy) | Out-Null
+            git clone --depth 1 --branch freecad-master --recurse-submodules https://github.com/FreeCAD/pivy.git $pivy
+            if ($LASTEXITCODE -ne 0) { throw "Failed to restore bundled Pivy submodule." }
+          }
+
+          if (!(Test-Path (Join-Path $coin "CMakeLists.txt"))) { throw "Bundled Coin CMakeLists.txt is still missing." }
+          if (!(Test-Path (Join-Path $pivy "CMakeLists.txt"))) { throw "Bundled Pivy CMakeLists.txt is still missing." }
+
+          Write-Host "Bundled Coin restored: $coin"
+          Write-Host "Bundled Pivy restored: $pivy"
       - name: Configure native Windows build
         shell: powershell
         run: |
