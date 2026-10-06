@@ -27,6 +27,7 @@ jobs:
         run: |
           choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y --no-progress
           choco install innosetup -y --no-progress
+          choco install 7zip -y --no-progress
       - name: Download FreeCAD Windows LibPack
         shell: powershell
         run: |
@@ -55,7 +56,11 @@ jobs:
           "DODI_SOURCE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Configure native Windows build
         shell: powershell
-        run: cmake -S "$env:DODI_SOURCE_ROOT" -B build -G "Visual Studio 17 2022" -A x64 -DFREECAD_USE_PCH=OFF
+        run: |
+          Write-Host "Using LibPack: $env:FREECAD_LIBPACK_DIR"
+          cmake -S "$env:DODI_SOURCE_ROOT" -B build -G "Visual Studio 17 2022" -A x64 `
+            -DFREECAD_LIBPACK_DIR="$env:FREECAD_LIBPACK_DIR" `
+            -DFREECAD_USE_PCH=OFF
       - name: Build Release
         shell: powershell
         run: cmake --build build --config Release --parallel 2
