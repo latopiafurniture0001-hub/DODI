@@ -236,7 +236,16 @@ jobs:
       - name: Build installer
         shell: powershell
         run: |
-          $iss = @'
+          $buildRoot = (Resolve-Path "package\build").Path
+          $exe = Get-ChildItem -Path $buildRoot -Recurse -Filter "FreeCAD.exe" -File |
+            Where-Object { $_.FullName -match "\\bin\\(?:Release\\)?FreeCAD\.exe$" } |
+            Select-Object -First 1
+          if (!$exe) { throw "FreeCAD.exe was not found in the packaged build tree." }
+
+          $relativeExe = $exe.FullName.Substring($buildRoot.Length + 1).Replace("\", "/")
+          Write-Host "Installer entry point: $relativeExe"
+
+          $iss = @"
           [Setup]
           AppName=DODI CAM
           AppVersion=1.0.0
@@ -248,13 +257,15 @@ jobs:
           [Files]
           Source: "package\build\**\*"; DestDir: "{app}\build"; Flags: recursesubdirs ignoreversion
           [Icons]
-          Name: "{autodesktop}\DODI CAM"; Filename: "{app}\build\bin\FreeCAD.exe"
-          Name: "{group}\DODI CAM"; Filename: "{app}\build\bin\FreeCAD.exe"
+          Name: "{autodesktop}\DODI CAM"; Filename: "{app}\build\$relativeExe"
+          Name: "{group}\DODI CAM"; Filename: "{app}\build\$relativeExe"
           [UninstallDelete]
           Type: filesandordirs; Name: "{app}"
-          '@
+          "@
+
           $iss | Set-Content -Encoding UTF8 DODI-CAM.iss
           & "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe" DODI-CAM.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed." }
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
@@ -263,3 +274,5 @@ jobs:
             DODI-CAM-Setup.exe
             DODI-CAM-Native-Windows-Build.zip
           if-no-files-found: error
+
+# Native Windows build trigger: build the finished DODI FreeCAD project now.
